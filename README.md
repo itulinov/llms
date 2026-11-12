@@ -1,4 +1,4 @@
-# lLMS
+# llms
 
 Система управления обучением (LMS), созданная с использованием Go, React,
 PostgreSQL и Docker.
