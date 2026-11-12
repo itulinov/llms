@@ -1,9 +1,9 @@
-# LMS
+# lLMS
 
-A Learning Management System built with Go, React,
-PostgreSQL and Docker.
+Система управления обучением (LMS), созданная с использованием Go, React,
+PostgreSQL и Docker.
 
-The project is under active development.
+Проект находится в стадии активной разработки.
 
 ## Запуск на сервере
 
