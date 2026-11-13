@@ -100,7 +100,7 @@ func registerStructure(mux *http.ServeMux, a *authService, pool *pgxpool.Pool) {
 				q = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q)
 				args = append(args, "%"+q+"%")
 				param := "$" + strconv.Itoa(len(args))
-				where += " AND (name ILIKE " + param + " OR code ILIKE " + param + ")"
+				where += " AND " + cardSearch(structureSearchDocument(spec.table), param)
 			}
 			if spec.table == "subdivisions" {
 				if v := r.URL.Query().Get("status"); v != "" && v != "all" {
@@ -131,7 +131,7 @@ func registerStructure(mux *http.ServeMux, a *authService, pool *pgxpool.Pool) {
 				}
 			}
 			var total int
-			e = tx.QueryRow(r.Context(), "SELECT count(*) FROM "+spec.table+" WHERE "+where, args...).Scan(&total)
+			e = tx.QueryRow(r.Context(), "SELECT count(*) FROM "+spec.table+" t WHERE "+where, args...).Scan(&total)
 			if e != nil {
 				dbFail(w, e)
 				return

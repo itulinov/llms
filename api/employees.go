@@ -117,7 +117,7 @@ func registerEmployees(mux *http.ServeMux, a *authService, pool *pgxpool.Pool) {
 			return
 		}
 		defer tx.Rollback(r.Context())
-		where := ` WHERE ($1='' OR c.fullname ILIKE $1 ESCAPE '\' OR c.code ILIKE $1 ESCAPE '\' OR c.email ILIKE $1 ESCAPE '\') AND ($2 IN ('','all') OR c.is_dismiss=($2='dismissed'))`
+		where := " WHERE ($1='' OR " + cardSearch(employeeSearchDocument, "$1") + ") AND ($2 IN ('','all') OR c.is_dismiss=($2='dismissed'))"
 		if q != "" {
 			q = "%" + q + "%"
 		}
