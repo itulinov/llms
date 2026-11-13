@@ -5,12 +5,20 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		if err := runCLI(os.Args[1:], os.Stdin, os.Stdout); err != nil {
+			log.Print(err)
+			os.Exit(1)
+		}
+		return
+	}
 	// pgxpool читает PGHOST, PGPORT, PGUSER,
 	// PGPASSWORD, PGDATABASE, PGSSLMODE.
 	config, err := loadAuthConfig()

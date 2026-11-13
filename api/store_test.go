@@ -5,9 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"net/url"
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,6 +61,57 @@ func TestPostgresSessions(t *testing.T) {
 	if _, e = pool.Exec(ctx, string(schema)); e != nil {
 		t.Fatal(e)
 	}
+
+	// Два отдельных процесса используют разные пулы и общую advisory-блокировку.
+	childURL, err := url.Parse(raw)
+	if err != nil || childURL.Scheme == "" {
+		t.Fatal("integration test requires PostgreSQL URL")
+	}
+	childURL.Path = "/" + name
+	query := childURL.Query()
+	query.Del("dbname")
+	childURL.RawQuery = query.Encode()
+	results := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestBootstrapProcess$")
+			cmd.Env = append(os.Environ(), "LMS_BOOTSTRAP_TEST_URL="+childURL.String())
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				results <- fmt.Errorf("bootstrap subprocess failed: %s", output)
+				return
+			}
+			if strings.Contains(string(output), "ADMIN_ALREADY_EXISTS") {
+				results <- errAdminExists
+			} else {
+				results <- nil
+			}
+		}()
+	}
+	success, refused := 0, 0
+	for i := 0; i < 2; i++ {
+		err := <-results
+		if err == nil {
+			success++
+		} else if errors.Is(err, errAdminExists) {
+			refused++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if success != 1 || refused != 1 {
+		t.Fatal("concurrent bootstrap", success, refused)
+	}
+	var saved string
+	if err := pool.QueryRow(ctx, "SELECT password_hash FROM accounts WHERE login='bootstrap'").Scan(&saved); err != nil || !checkPassword(saved, "bootstrap-password-123") {
+		t.Fatal("bootstrap password", err)
+	}
+	if err := createFirstAdmin(ctx, pool, "second", "bootstrap-password-123"); !errors.Is(err, errAdminExists) {
+		t.Fatal("repeat bootstrap", err)
+	}
+	if _, err := pool.Exec(ctx, "DELETE FROM accounts WHERE login='bootstrap'"); err != nil {
+		t.Fatal(err)
+	}
 	var c, id string
 	if e = pool.QueryRow(ctx, "INSERT INTO collaborators(lastname,firstname) VALUES('Иванов','Иван') RETURNING id::text").Scan(&c); e != nil {
 		t.Fatal(e)
@@ -104,8 +159,46 @@ func TestPostgresSessions(t *testing.T) {
 	if e = s.create(ctx, id, token, time.Microsecond); e != nil {
 		t.Fatal(e)
 	}
+
+	if err := s.create(ctx, id, append([]byte{1}, token[1:]...), time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	count, err := cleanupSessions(ctx, pool)
+	if err != nil || count != 1 {
+		t.Fatal("cleanup", count, err)
+	}
+	if _, err := s.session(ctx, append([]byte{1}, token[1:]...)); err != nil {
+		t.Fatal("active session deleted", err)
+	}
+	count, err = cleanupSessions(ctx, pool)
+	if err != nil || count != 0 {
+		t.Fatal("repeat cleanup", count, err)
+	}
 	// Ожидание срока не требуется: следующий запрос начинается после INSERT.
 	if _, e = s.session(ctx, token); !errors.Is(e, pgx.ErrNoRows) {
 		t.Fatal(e)
+	}
+}
+
+// Выполняется только как дочерний процесс интеграционного теста.
+func TestBootstrapProcess(t *testing.T) {
+	raw := os.Getenv("LMS_BOOTSTRAP_TEST_URL")
+	if raw == "" {
+		t.Skip("subprocess helper")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	err = createFirstAdmin(ctx, pool, "bootstrap", "bootstrap-password-123")
+	if errors.Is(err, errAdminExists) {
+		fmt.Println("ADMIN_ALREADY_EXISTS")
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 }
