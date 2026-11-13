@@ -28,3 +28,10 @@ test('ошибка выхода скрывает кабинет и сохран�
 test('403 не превращается в отсутствие сессии',async()=>{
  let state;const a=createAuth(s=>state=s);globalThis.fetch=async()=>response(200,{role:'employee'});await a.check();globalThis.fetch=async()=>response(403,{});await a.check();assert.equal(state.user.role,'employee');assert.equal(state.unavailable,true);a.dispose();
 });
+test('фокус не стирает ошибку входа и не скрывает анонимную форму',async()=>{
+ const states=[];const a=createAuth(s=>states.push(s));globalThis.fetch=async()=>response(401,{});
+ await a.login('ivanov','wrong-password');const before=states.length;
+ window.dispatchEvent(new Event('focus'));await new Promise(r=>setTimeout(r,0));
+ assert.equal(states.length,before);assert.equal(states.at(-1).error,'Неверный логин или пароль.');
+ globalThis.fetch=async()=>response(200,{login:'ivanov'});window.dispatchEvent(new Event('focus'));await new Promise(r=>setTimeout(r,0));assert.equal(states.at(-1).user.login,'ivanov');a.dispose();
+});

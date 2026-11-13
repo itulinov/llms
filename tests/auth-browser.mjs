@@ -14,6 +14,17 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 let browser;
 try {
  browser=await firefox.launch();
+ // Реальный fetch в браузере при зависшем HTTP-запросе должен завершиться по таймауту.
+ {
+ const context=await browser.newContext();const page=await context.newPage();
+ let calls=0;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/api/**',route=>{calls++; /* Не отвечаем: имитируем зависший API. */});
+ await page.goto(`http://127.0.0.1:${server.address().port}/portal/`);
+ await page.getByText('Сервис временно недоступен. Повторите запрос.',{exact:true}).waitFor({timeout:13000});
+ assert.equal(await page.locator('#status').textContent(),'Вход в корпоративную LMS');
+ assert.equal(calls,1);assert.deepEqual(errors,[]);
+ await context.close();console.log('PASS Firefox: зависший API прекращает проверку через 10 секунд');
+ }
  for (const path of ['/','/portal/']) {
  const context=await browser.newContext();const page=await context.newPage();page.setDefaultTimeout(10000);let user=null;let mode=200;
  const admin={id:'a',login:'admin',role:'admin',fullname:null,collaborator_id:null};
