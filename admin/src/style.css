@@ -21,3 +21,5 @@ button { border: 0; background: #295cb5; color: white; padding: 11px 17px; borde
 button:hover { background: #194a9d; }
 .note { font-size: 13px; color: #758196; margin-top: 18px; }
 @media (max-width: 680px) { .layout { display: block; } .sidebar { width: auto; } .content { padding: 30px 20px; } }
+
+.auth-panel {max-width:440px;margin:8vh auto;padding:28px;background:white;border:1px solid #e1e7f0;border-radius:14px;} label {display:block;margin:16px 0;} input {display:block;width:100%;padding:12px;margin-top:6px;border:1px solid #758196;border-radius:6px;font:inherit;} :focus-visible {outline:3px solid #5273a6;outline-offset:3px;} button:disabled {opacity:.5;cursor:wait;}

@@ -86,7 +86,7 @@ localhost; для Vite добавьте его origin. Production требует
 `GET /api/auth/me`, `POST /api/auth/logout` (можно без тела),
 `GET /api/admin/health` (роль admin). Изменяющие запросы требуют разрешённый
 Origin, запросы с телом — application/json. Публичный `/health` сохранён.
-Прокси Admin уже удаляет `/api/`; подключение Portal и формы входа — следующий этап.
+Прокси Admin и Portal удаляют `/api/`; формы входа используют общий Go API.
 Первого администратора создавайте служебной командой ниже, без ручных INSERT.
 
 По умолчанию forwarded-заголовкам доверия нет. Для корректного IP-limiter за
@@ -129,3 +129,40 @@ docker compose exec -T api /app/server cleanup-sessions
 и допускает повторные запуски. Её можно запускать периодически вручную или из
 планировщика; действующие сессии не затрагиваются. Обе команды используют PG*
 из окружения контейнера, не требуют AUTH_* и не запускают HTTP-сервер.
+
+## Вход в Admin и Portal
+
+Оба интерфейса проверяют `/api/auth/me`, поддерживают вход и выход.
+Admin допускает только роль admin; Portal — admin и employee.
+Cookie общая для портов одного хоста: `http://IP:8081` и `http://IP:8082`.
+`localhost` и IP — разные хосты, общей сессии между ними нет.
+После выхода другая вкладка обновляет состояние при возвращении в фокус.
+Сеть и HTTP 503 показываются как временная недоступность, а не завершение сессии.
+
+```bash
+docker compose up -d --build api admin portal
+# Если первый администратор ещё не создан:
+docker compose exec api /app/server create-admin --login admin
+```
+
+Для Vite: добавьте `http://localhost:5173` (или фактический адрес браузера)
+в AUTH_ALLOWED_ORIGINS, пересоздайте API, затем запустите `npm run dev` из admin.
+Vite проксирует /api/ в localhost:8083; Portal локально обслуживается через Compose.
+
+Локальные проверки:
+
+```bash
+node --test tests/auth.test.mjs
+cd admin
+npm install --package-lock=false
+npm run build
+npx playwright install firefox
+cd ..
+node tests/auth-browser.mjs
+```
+
+Playwright — только dev-зависимость; браузерные тесты подменяют API и не работают
+с рабочими accounts. После git pull на сервере выполните Docker-сборку,
+отложенные PostgreSQL/CLI-тесты в изолированной БД и проверку в Firefox:
+вход администратора → обновление → Portal на том же хосте → выход →
+возврат в Admin. Проверьте также запрещённый доступ сотрудника к Admin.
