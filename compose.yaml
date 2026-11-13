@@ -20,6 +20,10 @@ services:
     ports:
       - "8083:8080"
     environment:
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-false}"
+      AUTH_ALLOWED_ORIGINS: "${AUTH_ALLOWED_ORIGINS}"
+      AUTH_SESSION_TTL: "${AUTH_SESSION_TTL:-12h}"
+      AUTH_TRUSTED_PROXIES: "${AUTH_TRUSTED_PROXIES:-}"
       PGHOST: db
       PGPORT: "5432"
       PGUSER: lms

@@ -65,3 +65,44 @@ functionality is not permitted without separate
 authorization from the copyright holder.
 
 See [LICENSE](LICENSE) for the full legal terms.
+
+## Серверная авторизация
+
+Перед пересборкой API добавьте в локальный `.env` (не коммитить):
+
+```dotenv
+AUTH_COOKIE_SECURE=false
+AUTH_ALLOWED_ORIGINS=http://localhost:8081,http://localhost:8082
+AUTH_SESSION_TTL=12h
+AUTH_TRUSTED_PROXIES=
+```
+
+Origins обязательны и включают схему и порт. Для доступа по IP сервера замените
+localhost; для Vite добавьте его origin. Production требует HTTPS и
+`AUTH_COOKIE_SECURE=true`. Cookie общая для портов одного хоста, но не для
+разных хостов (например localhost и IP VirtualBox).
+
+Внешние маршруты: `POST /api/auth/login` (JSON login/password),
+`GET /api/auth/me`, `POST /api/auth/logout` (можно без тела),
+`GET /api/admin/health` (роль admin). Изменяющие запросы требуют разрешённый
+Origin, запросы с телом — application/json. Публичный `/health` сохранён.
+Прокси Admin уже удаляет `/api/`; подключение Portal и формы входа — следующий этап.
+Команды создания администратора пока нет; вручную рабочие accounts не создавайте.
+
+По умолчанию forwarded-заголовкам доверия нет. Для корректного IP-limiter за
+Nginx задайте AUTH_TRUSTED_PROXIES списком точных доверенных CIDR через запятую.
+Не доверяйте всей сети без необходимости: клиенты из доверенной сети смогут
+влиять на определение адреса. Разбирается X-Forwarded-For справа налево.
+Limiter хранится в памяти одного API и сбрасывается при перезапуске;
+сессии хранятся в PostgreSQL и сохраняются после перезапуска.
+
+```bash
+cd api
+go test -race ./...
+go build ./...
+# URL служебной тестовой PostgreSQL с правом CREATE DATABASE:
+AUTH_TEST_DATABASE_URL='postgres://user:password@host/postgres' go test -race -run TestPostgresSessions -v
+```
+
+Интеграционный тест создаёт отдельную БД со случайным именем, затем удаляет её;
+при отсутствии AUTH_TEST_DATABASE_URL он явно пропускается.

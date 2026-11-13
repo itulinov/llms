@@ -13,6 +13,10 @@ import (
 func main() {
 	// pgxpool читает PGHOST, PGPORT, PGUSER,
 	// PGPASSWORD, PGDATABASE, PGSSLMODE.
+	config, err := loadAuthConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 	ctx := context.Background()
 
 	pool, err := pgxpool.New(ctx, "")
@@ -22,6 +26,12 @@ func main() {
 	defer pool.Close()
 
 	mux := http.NewServeMux()
+	dummy, err := hashPassword("dummy-password-for-auth")
+	if err != nil {
+		log.Fatal(err)
+	}
+	auth := &authService{store: pgAuthStore{pool}, config: config, limiter: newLimiter(), dummy: dummy}
+	auth.register(mux)
 
 	// Проверка API и PostgreSQL
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +58,7 @@ func main() {
 	})
 
 	// Информация о backend
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -58,5 +68,5 @@ func main() {
 	})
 
 	log.Println("Go API listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", auth.csrf(mux)))
 }
