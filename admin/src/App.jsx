@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
+import Employees from './Employees';
 import { createAuth } from './auth';
 
 export default function App() {
   const [auth, setAuth] = useState({busy:true, user:null});
   const client = useRef(null);
+  const [section,setSection]=useState('dashboard');
   const [login, setLogin] = useState('');
   const [locked, setLocked] = useState(false);
   const lockedUntil = useRef(0);
@@ -46,14 +48,15 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">Corporate LMS <small>Администрирование</small></div>
         <nav aria-label="Главное меню">
-          <a className="active" href="#dashboard">Главная</a>
-          <span>Сотрудники — скоро</span>
+          <button onClick={()=>{if(section!=='employees'||window.confirm('Перейти на главную? Несохранённые изменения будут потеряны.'))setSection('dashboard')}}>Главная</button>
+          <button onClick={()=>setSection('employees')}>Сотрудники</button>
           <span>Курсы — скоро</span>
           <span>Назначения — скоро</span>
           <span>Настройки — скоро</span>
         </nav>
       </aside>
       <main id="dashboard" className="content">
+        {section==='employees'?<Employees onUnauthorized={()=>client.current.check()}/>:<>
         <div className="eyebrow">Административная панель</div>
         <h1>Добро пожаловать в LMS</h1><p>{auth.user.login}</p><button onClick={()=>client.current.logout()}>Выйти</button>
         <p className="intro">Административная панель корпоративного обучения.</p>
@@ -68,7 +71,7 @@ export default function App() {
           )}
           <button onClick={checkApi}>Проверить снова</button>
 
-        </section>
+        </section></>}
       </main>
     </div>
   );

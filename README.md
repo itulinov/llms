@@ -166,3 +166,43 @@ Playwright — только dev-зависимость; браузерные т�
 отложенные PostgreSQL/CLI-тесты в изолированной БД и проверку в Firefox:
 вход администратора → обновление → Portal на том же хосте → выход →
 возврат в Admin. Проверьте также запрещённый доступ сотрудника к Admin.
+
+## Сотрудники и учётные записи (этап 05)
+
+В Admin раздел «Сотрудники» поддерживает поиск, фильтр статуса, создание и
+редактирование основных кадровых полей. Карточка использует updated_at для
+защиты от потери изменений: конфликт 409 требует загрузить актуальную версию.
+Кадровый логин, data и должности редактор не меняет.
+
+Доступ employee создаётся в карточке. Блокировка, увольнение и новый пароль
+отзывают все сессии. Возврат в штат включает доступ даже после ручной блокировки;
+интерфейс предупреждает об этом. Разблокировка уволенного отдельно запрещена.
+Создание admin и смена роли через интерфейс не поддерживаются.
+
+API: GET/POST /api/admin/collaborators, GET/PUT /api/admin/collaborators/{id},
+POST .../{id}/account, PUT .../{id}/account/status, POST .../{id}/account/password.
+Все endpoints требуют admin. Новый SQL не нужен.
+
+Проверки: `go test -race ./...` из api (с AUTH_TEST_DATABASE_URL также проверяется
+жизненный цикл сотрудника в отдельной БД); после сборки Admin:
+`node tests/employees-browser.mjs`.
+
+### Перед первым рабочим развёртыванием этапа 05
+
+Создайте backup в исключённом из Git каталоге:
+
+```bash
+umask 077
+mkdir -p backups
+docker compose exec -T db pg_dump -U lms -d lms -Fc > backups/before-stage05.dump
+# Проверить восстановлением в отдельную пустую БД:
+docker compose exec -T db createdb -U lms lms_backup_verify_stage05
+docker compose exec -T db pg_restore -U lms -d lms_backup_verify_stage05 --exit-on-error < backups/before-stage05.dump
+docker compose exec -T db psql -U lms -d lms_backup_verify_stage05 -c 'SELECT count(*) FROM collaborators; SELECT count(*) FROM accounts;'
+docker compose exec -T db dropdb -U lms lms_backup_verify_stage05
+```
+
+Если любое действие завершается ошибкой, остановите развёртывание и разберите
+причину; не используйте рабочую lms как цель pg_restore. После проверки backup
+выполните `docker compose up -d --build api admin`, затем проверьте реальный цикл
+создания сотрудника, входа, увольнения и восстановления через Firefox.

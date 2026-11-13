@@ -30,7 +30,7 @@ func createFirstAdmin(ctx context.Context, pool *pgxpool.Pool, login, password s
 		return err
 	}
 	defer tx.Rollback(context.Background())
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(2026111301)"); err != nil {
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", adminLock); err != nil {
 		return err
 	}
 	var exists bool

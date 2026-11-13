@@ -197,7 +197,11 @@ func (a *authService) login(w http.ResponseWriter, r *http.Request) {
 		fail(w, 503)
 		return
 	}
-	if e = a.store.create(r.Context(), u.ID, t, a.config.ttl); e != nil {
+	if e = a.store.create(context.WithValue(r.Context(), verifiedHashKey{}, hash), u.ID, t, a.config.ttl); e != nil {
+		if errors.Is(e, pgx.ErrNoRows) {
+			fail(w, 401)
+			return
+		}
 		fail(w, 503)
 		return
 	}

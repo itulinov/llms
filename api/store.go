@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
 )
@@ -34,12 +35,34 @@ func (s pgAuthStore) session(ctx context.Context, token []byte) (u user, err err
 	return
 }
 func (s pgAuthStore) create(ctx context.Context, id string, token []byte, ttl time.Duration) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var active bool
+	var hash string
+	if err = tx.QueryRow(ctx, "SELECT is_active,password_hash FROM accounts WHERE id=$1 FOR UPDATE", id).Scan(&active, &hash); err != nil {
+		return err
+	}
+	if !active {
+		return pgx.ErrNoRows
+	}
+	expected, _ := ctx.Value(verifiedHashKey{}).(string)
+	if expected != "" && expected != hash {
+		return pgx.ErrNoRows
+	}
 	h := sha256.Sum256(token)
-	_, err := s.pool.Exec(ctx, "INSERT INTO auth_sessions(account_id,token_hash,expires_at) VALUES($1,$2,now()+$3::bigint*interval '1 microsecond')", id, h[:], ttl.Microseconds())
-	return err
+	_, err = tx.Exec(ctx, "INSERT INTO auth_sessions(account_id,token_hash,expires_at) VALUES($1,$2,now()+$3::bigint*interval '1 microsecond')", id, h[:], ttl.Microseconds())
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 func (s pgAuthStore) revoke(ctx context.Context, token []byte) error {
 	h := sha256.Sum256(token)
 	_, err := s.pool.Exec(ctx, "DELETE FROM auth_sessions WHERE token_hash=$1", h[:])
 	return err
 }
+
+type verifiedHashKey struct{}
