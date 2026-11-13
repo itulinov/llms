@@ -72,6 +72,8 @@ func registerStructure(mux *http.ServeMux, a *authService, pool *pgxpool.Pool) {
 				return
 			}
 			where := "true"
+			orgFilter := r.URL.Query().Get("org_id")
+			subFilter := r.URL.Query().Get("subdivision_id")
 			args := []any{}
 			if spec.immutable != "" && r.URL.Query().Get(spec.immutable) != "" {
 				args = append(args, r.URL.Query().Get(spec.immutable))
@@ -94,12 +96,40 @@ func registerStructure(mux *http.ServeMux, a *authService, pool *pgxpool.Pool) {
 					where += " AND status=$" + strconv.Itoa(len(args))
 				}
 			}
+			if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+				q = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q)
+				args = append(args, "%"+q+"%")
+				param := "$" + strconv.Itoa(len(args))
+				where += " AND (name ILIKE " + param + " OR code ILIKE " + param + ")"
+			}
+			if spec.table == "subdivisions" {
+				if v := r.URL.Query().Get("status"); v != "" && v != "all" {
+					args = append(args, v)
+					where += " AND status=$" + strconv.Itoa(len(args))
+				}
+			}
+			if spec.table == "positions" && orgFilter != "" {
+				args = append(args, orgFilter)
+				where += " AND subdivision_id IN (SELECT id FROM subdivisions WHERE org_id=$" + strconv.Itoa(len(args)) + ")"
+			}
 			tx, e := pool.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 			if e != nil {
 				dbFail(w, e)
 				return
 			}
 			defer tx.Rollback(r.Context())
+			if spec.table == "positions" && orgFilter != "" && subFilter != "" {
+				var belongs bool
+				e = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT FROM subdivisions WHERE id=$1 AND org_id=$2)", subFilter, orgFilter).Scan(&belongs)
+				if e != nil {
+					dbFail(w, e)
+					return
+				}
+				if !belongs {
+					fail(w, 400)
+					return
+				}
+			}
 			var total int
 			e = tx.QueryRow(r.Context(), "SELECT count(*) FROM "+spec.table+" WHERE "+where, args...).Scan(&total)
 			if e != nil {
@@ -107,7 +137,7 @@ func registerStructure(mux *http.ServeMux, a *authService, pool *pgxpool.Pool) {
 				return
 			}
 			args = append(args, limit, offset)
-			rows, e := tx.Query(r.Context(), "SELECT "+structureJSON("t")+" FROM "+spec.table+" t WHERE "+where+" ORDER BY name,id LIMIT $"+strconv.Itoa(len(args)-1)+" OFFSET $"+strconv.Itoa(len(args)), args...)
+			rows, e := tx.Query(r.Context(), "SELECT "+structureListJSON(spec.table)+" FROM "+spec.table+" t WHERE "+where+" ORDER BY name,id LIMIT $"+strconv.Itoa(len(args)-1)+" OFFSET $"+strconv.Itoa(len(args)), args...)
 			if e != nil {
 				dbFail(w, e)
 				return
@@ -320,4 +350,15 @@ func registerStructure(mux *http.ServeMux, a *authService, pool *pgxpool.Pool) {
 		}
 	}
 	registerAssignments(handle, pool)
+}
+
+func structureListJSON(table string) string {
+	base := structureJSON("t")
+	switch table {
+	case "subdivisions":
+		return base + ` || jsonb_build_object('org_name',(SELECT name FROM orgs WHERE id=t.org_id),'parent_name',(SELECT name FROM subdivisions WHERE id=t.parent_id))`
+	case "positions":
+		return base + ` || jsonb_build_object('subdivision_name',(SELECT name FROM subdivisions WHERE id=t.subdivision_id),'org_id',(SELECT org_id FROM subdivisions WHERE id=t.subdivision_id),'org_name',(SELECT o.name FROM orgs o JOIN subdivisions s ON s.org_id=o.id WHERE s.id=t.subdivision_id),'collaborator_fullname',(SELECT fullname FROM collaborators WHERE id=t.collaborator_id))`
+	}
+	return base
 }

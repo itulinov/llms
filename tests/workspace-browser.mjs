@@ -1,0 +1,23 @@
+import {firefox} from '../admin/node_modules/playwright/index.mjs';
+import {createServer} from 'node:http';import {readFile} from 'node:fs/promises';import {resolve,extname} from 'node:path';import assert from 'node:assert/strict';
+const root=resolve(import.meta.dirname,'../admin/dist');
+const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+(req.url==='/'?'/index.html':req.url));if(!path.startsWith(root+'/'))throw Error();res.setHeader('Content-Type',extname(path)==='.js'?'application/javascript':extname(path)==='.css'?'text/css':'text/html');res.end(await readFile(path))}catch{res.statusCode=404;res.end()}});await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+try{browser=await firefox.launch();const page=await browser.newPage();page.setDefaultTimeout(10000);
+const rows=Array.from({length:60},(_,i)=>({id:'row'+i,fullname:'Иванов '+String(i+1).padStart(2,'0'),lastname:'Иванов',firstname:String(i+1).padStart(2,'0'),is_dismiss:false,updated_at:'2026-11-13T00:00:00.000001Z',account:null}));
+await page.route('**/api/**',async route=>{const r=route.request(),u=new URL(r.url()),path=u.pathname;let data;
+if(path==='/api/auth/me')data={login:'admin',role:'admin'};else if(path==='/api/admin/health')data={status:'ok',database:'connected'};
+else if(path==='/api/admin/collaborators'){let selected=rows.filter(x=>(!u.searchParams.get('q')||x.fullname.includes(u.searchParams.get('q')))&&(u.searchParams.get('status')!=='active'||!x.is_dismiss));const offset=Number(u.searchParams.get('offset')||0);data={items:selected.slice(offset,offset+25),total:selected.length};}
+else if(path.endsWith('/positions'))data={collaborator:{main_position_id:null},positions:[]};else if(path.endsWith('/position-history'))data={items:[],total:0};
+else if(path.includes('/collaborators/')){const id=path.split('/').at(-1);const row=rows.find(x=>x.id===id);if(r.method()==='PUT'){Object.assign(row,r.postDataJSON());data={id}}else data=row;}
+else data={items:[{id:'org',name:'Компания'}],total:1};await route.fulfill({status:200,json:data});});
+await page.goto(`http://127.0.0.1:${server.address().port}/`);
+await page.getByLabel('Поиск',{exact:true}).fill('Иванов');await page.getByLabel('Статус',{exact:true}).selectOption('active');
+await page.getByRole('button',{name:'Следующая страница',exact:true}).click();await page.getByText('Страница 2 из 3',{exact:true}).waitFor();await page.getByRole('button',{name:'Иванов 26',exact:true}).waitFor();await page.getByRole('button',{name:'Следующая страница',exact:true}).click();await page.getByRole('button',{name:'Иванов 51',exact:true}).click();
+assert.equal(await page.locator('dialog').evaluate(d=>d.open),true);
+await page.getByLabel('Уволен',{exact:true}).check();await page.getByRole('button',{name:'Сохранить',exact:true}).click();await page.getByRole('button',{name:'Закрыть карточку',exact:true}).click();
+await page.getByText('Страница 3 из 3',{exact:true}).waitFor();assert.equal(await page.getByLabel('Поиск',{exact:true}).inputValue(),'Иванов');assert.equal(await page.getByLabel('Статус',{exact:true}).inputValue(),'active');assert.equal(await page.getByRole('button',{name:'Иванов 51',exact:true}).count(),0);
+assert.equal(await page.getByRole('button',{name:'Новая запись',exact:true}).evaluate(e=>document.activeElement===e),true);
+await page.getByRole('button',{name:'Организации',exact:true}).click();await page.getByRole('button',{name:'Компания',exact:true}).waitFor();await page.getByRole('button',{name:'Сотрудники',exact:true}).click();await page.getByText('Страница 3 из 3',{exact:true}).waitFor();
+await page.getByRole('button',{name:'Иванов 52',exact:true}).click();await page.getByLabel('Фамилия',{exact:true}).fill('Петров');page.once('dialog',d=>d.dismiss());await page.keyboard.press('Escape');assert.equal(await page.locator('dialog').evaluate(d=>d.open),true);page.once('dialog',d=>d.accept());await page.keyboard.press('Escape');assert.equal(await page.locator('dialog').evaluate(d=>d.open),false);await page.getByRole('button',{name:'Иванов 52',exact:true}).waitFor();await page.waitForFunction(()=>document.activeElement?.textContent==='Иванов 52');
+await page.setViewportSize({width:375,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.getByRole('button',{name:'Курсы',exact:true}).click();await page.getByText('Раздел находится в разработке. Функциональность появится в следующих версиях LMS.',{exact:true}).waitFor();console.log('PASS Firefox: таблицы, состояние, исчезновение строки, фокус, Escape и мобильная ширина');
+}finally{await browser?.close();await new Promise(r=>server.close(r))}

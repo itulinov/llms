@@ -135,6 +135,24 @@ func testStructureLifecycle(t *testing.T, pool *pgxpool.Pool) {
 		t.Fatal("closing detached employee", closed)
 	}
 	expect(409, "PUT", "positions/"+pid, map[string]any{"name": "Stale", "subdivision_id": sid, "updated_at": p["updated_at"]})
+	listed := expect(200, "GET", "positions?org_id="+orgID+"&subdivision_id="+sid+"&q=%D0%9D%D0%BE%D0%B2%D0%B0%D1%8F&limit=25", nil)
+	if listed["total"].(float64) != 1 {
+		t.Fatal("filtered list", listed)
+	}
+	row := listed["items"].([]any)[0].(map[string]any)
+	if row["org_name"] != "Новое имя" || row["collaborator_fullname"] == nil {
+		t.Fatal("display names", row)
+	}
+	otherOrg := expect(201, "POST", "orgs", map[string]any{"name": "Other_%"})
+	expect(400, "GET", "positions?org_id="+otherOrg["id"].(string)+"&subdivision_id="+sid, nil)
+	literal := expect(200, "GET", "orgs?q=%25", nil)
+	if literal["total"].(float64) != 1 {
+		t.Fatal("literal percent", literal)
+	}
+	literal = expect(200, "GET", "orgs?q=%5F", nil)
+	if literal["total"].(float64) != 1 {
+		t.Fatal("literal underscore", literal)
+	}
 	// Физическое удаление должностей запрещено: тестовая БД целиком удаляется fixture.
 }
 

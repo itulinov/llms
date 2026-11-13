@@ -34,6 +34,7 @@ try {
   if(url.pathname.endsWith('/login')){if(mode!==200){status=mode;data={error:'error'};}else{user={...admin};data=user;}}
   else if(url.pathname.endsWith('/logout')){user=null;status=204;}
   else if(url.pathname.endsWith('/me')){status=user?200:401;data=user||{error:'Unauthorized'};}
+  else if(url.pathname==='/api/admin/collaborators')data={items:[],total:0};
   else data={status:'ok',database:'connected'};
   await route.fulfill({status,headers:{'Content-Type':'application/json','Retry-After':'1'},body:status===204?'':JSON.stringify(data)});
  });
