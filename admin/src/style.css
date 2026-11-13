@@ -25,3 +25,7 @@ button:hover { background: #194a9d; }
 .auth-panel {max-width:440px;margin:8vh auto;padding:28px;background:white;border:1px solid #e1e7f0;border-radius:14px;} label {display:block;margin:16px 0;} input {display:block;width:100%;padding:12px;margin-top:6px;border:1px solid #758196;border-radius:6px;font:inherit;} :focus-visible {outline:3px solid #5273a6;outline-offset:3px;} button:disabled {opacity:.5;cursor:wait;}
 
 input[type="checkbox"] {display:inline-block;width:auto;margin-right:8px;} select {padding:10px;font:inherit;} .content form {max-width:600px;}
+
+.structure-columns{display:grid;grid-template-columns:minmax(160px,1fr) minmax(180px,1fr) minmax(250px,2fr);gap:20px}.structure-columns>section{min-width:0}.structure-columns ul{padding-left:18px}.structure-columns button{overflow-wrap:anywhere}.content{min-width:0}@media(max-width:1000px){.structure-columns{display:flex;flex-direction:column}.structure-columns>section{width:100%}}
+
+@media(max-width:1000px){.structure-columns>section{display:none}.structure-columns[data-step="orgs"]>section:nth-child(1),.structure-columns[data-step="subdivisions"]>section:nth-child(2),.structure-columns[data-step="content"]>section:nth-child(3){display:block}}

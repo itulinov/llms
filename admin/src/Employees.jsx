@@ -1,4 +1,5 @@
 import {useState,useEffect} from 'react';
+import Assignments from './Assignments';
 const empty={code:'',lastname:'',firstname:'',middlename:'',email:'',hire_date:'',dismiss_date:'',is_dismiss:false};
 async function api(path,method='GET',body){const c=new AbortController(),t=setTimeout(()=>c.abort(),10000);try{const r=await fetch('/api/admin/collaborators'+path,{method,signal:c.signal,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});if(!r.ok){const e=new Error(({400:'Проверьте поля.',401:'Сессия завершена.',403:'Доступ запрещён.',404:'Сотрудник не найден.',409:'Конфликт: данные изменены или действие запрещено.'})[r.status]||'Сервис недоступен. Повторите запрос.');e.status=r.status;throw e}return r.json()}finally{clearTimeout(t)}}
 export default function Employees({onUnauthorized}){
@@ -19,6 +20,7 @@ export default function Employees({onUnauthorized}){
  {conflict&&<button disabled={busy} onClick={()=>open(card.id)}>Загрузить актуальную карточку</button>}
  {card.id&&<section><h2>Доступ в LMS</h2>{card.account?<p>{card.account.login} · {card.account.role} · {card.account.is_active?'Активна':'Заблокирована'}</p>:<label>Логин<input autoComplete="off" value={login} onChange={e=>setLogin(e.target.value)}/></label>}
  {(!card.account||card.account.role==='employee')&&<><label>Новый пароль<input type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)}/></label><label>Подтверждение пароля<input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)}/></label><button disabled={busy||dirty} onClick={()=>access(card.account?'password':'create')}>{card.account?'Установить пароль':'Создать доступ'}</button>{card.account&&<button disabled={busy||dirty||(!card.account.is_active&&card.is_dismiss)} onClick={()=>access('status')}>{card.account.is_active?'Заблокировать':'Разблокировать'}</button>}{dirty&&<p>Сначала сохраните кадровые изменения.</p>}</>}</section>}
+ {card.id&&<Assignments id={card.id} onUnauthorized={onUnauthorized}/>}
  </>}
  </section>
 }

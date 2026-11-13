@@ -63,6 +63,7 @@ func TestPostgresSessions(t *testing.T) {
 	}
 
 	testEmployeeLifecycle(t, pool)
+	testStructureLifecycle(t, pool)
 	// Два отдельных процесса используют разные пулы и общую advisory-блокировку.
 	childURL, err := url.Parse(raw)
 	if err != nil || childURL.Scheme == "" {

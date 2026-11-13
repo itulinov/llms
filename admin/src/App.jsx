@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import Employees from './Employees';
+import Structure from './Structure';
 import { createAuth } from './auth';
 
 export default function App() {
@@ -30,7 +31,7 @@ export default function App() {
 
   const ready = health.httpOk && health.status === 'ok' && health.database === 'connected';
 
-  if (!auth.user || auth.busy || auth.error || auth.user.role !== 'admin') return <main className="auth-panel">
+  if (!auth.user || auth.user.role !== 'admin') return <main className="auth-panel">
     <h1>Вход в Admin</h1>
     {auth.busy ? <p role="status">Проверяем доступ…</p> : <>
     {auth.error && <p role="alert" className="error">{auth.error}</p>}
@@ -48,15 +49,16 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">Corporate LMS <small>Администрирование</small></div>
         <nav aria-label="Главное меню">
-          <button onClick={()=>{if(section!=='employees'||window.confirm('Перейти на главную? Несохранённые изменения будут потеряны.'))setSection('dashboard')}}>Главная</button>
-          <button onClick={()=>setSection('employees')}>Сотрудники</button>
+          <button onClick={()=>{if(section==='dashboard'||window.confirm('Перейти на главную? Несохранённые изменения будут потеряны.'))setSection('dashboard')}}>Главная</button>
+          <button onClick={()=>{if(section!=='structure'||window.confirm('Покинуть оргструктуру? Несохранённые изменения будут потеряны.'))setSection('employees')}}>Сотрудники</button><button onClick={()=>{if(section==='dashboard'||window.confirm('Покинуть карточку? Несохранённые изменения будут потеряны.'))setSection('structure')}}>Оргструктура</button>
           <span>Курсы — скоро</span>
           <span>Назначения — скоро</span>
           <span>Настройки — скоро</span>
         </nav>
       </aside>
       <main id="dashboard" className="content">
-        {section==='employees'?<Employees onUnauthorized={()=>client.current.check()}/>:<>
+        {auth.error&&<p role="alert" className="error">{auth.error} <button onClick={()=>client.current.check()}>Повторить проверку</button></p>}
+        {section==='structure'?<Structure onUnauthorized={()=>client.current.check()}/>:section==='employees'?<Employees onUnauthorized={()=>client.current.check()}/>:<>
         <div className="eyebrow">Административная панель</div>
         <h1>Добро пожаловать в LMS</h1><p>{auth.user.login}</p><button onClick={()=>client.current.logout()}>Выйти</button>
         <p className="intro">Административная панель корпоративного обучения.</p>

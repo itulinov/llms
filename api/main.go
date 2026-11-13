@@ -41,6 +41,7 @@ func main() {
 	auth := &authService{store: pgAuthStore{pool}, config: config, limiter: newLimiter(), dummy: dummy}
 	auth.register(mux)
 	registerEmployees(mux, auth, pool)
+	registerStructure(mux, auth, pool)
 
 	// Проверка API и PostgreSQL
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
